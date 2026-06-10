@@ -299,6 +299,19 @@ select.form-input option{background:var(--surface)}
   .kpi-grid{grid-template-columns:1fr}
   .invest-summary{grid-template-columns:repeat(2,1fr)}
 }
+
+/* ========== SYNC STATUS ========== */
+.sync-badge{display:flex;align-items:center;gap:5px;font-size:.72rem;font-weight:600;padding:4px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface2);white-space:nowrap;user-select:none}
+.sync-badge svg{width:13px;height:13px}
+.sync-idle{color:var(--muted)}
+.sync-pending,.sync-syncing{color:var(--amber)}
+.sync-saved{color:var(--green)}
+.sync-error{color:var(--red)}
+.sync-offline{color:var(--muted);opacity:.6}
+@keyframes spin{to{transform:rotate(360deg)}}
+.spinning{animation:spin .8s linear infinite}
+.loading-overlay{display:flex;align-items:center;justify-content:center;height:260px;gap:12px;color:var(--muted);font-size:.875rem}
+.loading-spinner{width:22px;height:22px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
 </style>
 </head>
 <body>
@@ -328,6 +341,9 @@ select.form-input option{background:var(--surface)}
   <div id="topbar">
     <span class="topbar-title" id="topbar-page-title">Dashboard</span>
     <div class="topbar-actions">
+      <div id="sync-status" class="sync-badge sync-idle" title="Cloud sync status">
+        <i data-lucide="cloud"></i><span id="sync-text">Synced</span>
+      </div>
       <div class="year-selector">
         <button class="year-btn" id="year-prev"><i data-lucide="chevron-left"></i></button>
         <span class="year-display" id="year-display">2025</span>
@@ -602,6 +618,12 @@ select.form-input option{background:var(--surface)}
   </div>
 </div>
 
+<!-- Loading overlay (shown while fetching cloud data on startup) -->
+<div id="load-overlay" class="hidden" style="position:fixed;inset:0;background:var(--bg);z-index:500;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px">
+  <div class="loading-spinner" style="width:32px;height:32px;border-width:3px"></div>
+  <span style="color:var(--muted);font-size:.875rem;font-weight:500">Loading your data from cloud…</span>
+</div>
+
 <div id="toast-container"></div>
 
 <script>
@@ -628,22 +650,87 @@ let debtAlertDismissed = false;
 let colClipboard = null;            // { module, monthIdx, data: { sectionKey: { rowId: value } } }
 
 // ============================================================
+// SYNC STATUS UI
+// ============================================================
+function setSyncStatus(state) {
+  const badge = document.getElementById('sync-status');
+  const text  = document.getElementById('sync-text');
+  const icon  = badge?.querySelector('i');
+  if(!badge || !text) return;
+  badge.className = 'sync-badge sync-' + state;
+  const icons = { idle:'cloud', pending:'cloud', syncing:'cloud-upload', saved:'cloud-check', error:'cloud-off', offline:'wifi-off' };
+  const labels = { idle:'Synced', pending:'Pending…', syncing:'Saving…', saved:'Saved', error:'Sync error', offline:'Offline' };
+  if(icon) { icon.setAttribute('data-lucide', icons[state]||'cloud'); lucide.createIcons({ el: badge }); }
+  text.textContent = labels[state] || state;
+}
+
+// ============================================================
 // DATA MODULE
 // ============================================================
-function loadData() {
+async function loadData() {
+  setSyncStatus('syncing');
+
+  // 1 — try cloud API (with 5 s timeout)
+  try {
+    const ctrl = new AbortController();
+    const tid  = setTimeout(() => ctrl.abort(), 5000);
+    const resp = await fetch('/api/data', { signal: ctrl.signal });
+    clearTimeout(tid);
+
+    if (resp.ok) {
+      const remote = await resp.json();
+      if (remote && (remote.settings || remote.years || remote.debts)) {
+        D = remote;
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(D)); } catch(_) {}
+        setSyncStatus('saved');
+        return true;
+      }
+    }
+  } catch(e) {
+    // Network error or timeout — fall through to localStorage
+    setSyncStatus('offline');
+    showToast('Cloud unavailable — using local data.', 'warning', 4000);
+  }
+
+  // 2 — fall back to localStorage
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) { D = JSON.parse(raw); return true; }
+    if (raw) { D = JSON.parse(raw); setSyncStatus('offline'); return true; }
   } catch(e) { showToast('Error loading data. Starting fresh.','error'); }
+
+  setSyncStatus('idle');
   return false;
 }
 
+// Debounce handle for cloud saves
+let _saveTimer = null;
+
 function saveData() {
+  // Always write localStorage immediately (zero latency)
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(D)); }
   catch(e) {
-    if (e.name === 'QuotaExceededError')
-      showToast('Storage full! Export your data.','warning');
-    else showToast('Error saving data.','error');
+    if(e.name === 'QuotaExceededError') showToast('Local storage full! Export your data.','warning');
+  }
+  // Debounce cloud push — fires 1.5 s after the last change
+  setSyncStatus('pending');
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(pushToBlob, 1500);
+}
+
+async function pushToBlob() {
+  setSyncStatus('syncing');
+  try {
+    const resp = await fetch('/api/data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(D)
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    setSyncStatus('saved');
+    setTimeout(() => setSyncStatus('idle'), 3000);
+  } catch(e) {
+    setSyncStatus('error');
+    showToast('Cloud sync failed. Data saved locally.', 'warning', 5000);
   }
 }
 
@@ -1758,8 +1845,14 @@ function bindAddRowModal() {
 // ============================================================
 // INIT
 // ============================================================
-function init() {
-  const hasData = loadData();
+async function init() {
+  // Show loading overlay while fetching from cloud (doesn't touch section DOM)
+  const overlay = document.getElementById('load-overlay');
+  if(overlay) overlay.classList.remove('hidden');
+
+  const hasData = await loadData();
+
+  if(overlay) overlay.classList.add('hidden');
 
   if(!hasData) {
     D = { settings: { appName:'Finflow', currency:'BRL', theme:'dark' }, years:{}, debts:[], goals:[] };
