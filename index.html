@@ -149,8 +149,13 @@ input,select,textarea{font-family:inherit}
 .cell-input:focus{outline:none;border-color:var(--accent);background:var(--surface2)}
 .cell-input:hover:not(:focus){border-color:var(--border)}
 .row-total{font-weight:600;font-size:.78rem;white-space:nowrap}
-.del-row-btn{background:none;border:none;color:var(--muted);cursor:pointer;padding:2px 5px;border-radius:4px;font-size:11px;opacity:.5;transition:all var(--tr)}
-.del-row-btn:hover{opacity:1;color:var(--red)}
+.del-row-btn,.edit-row-btn{background:none;border:none;color:var(--muted);cursor:pointer;padding:2px 4px;border-radius:4px;font-size:11px;opacity:0;transition:all var(--tr)}
+tr:hover .del-row-btn,tr:hover .edit-row-btn{opacity:.5}
+.del-row-btn:hover{opacity:1!important;color:var(--red)}
+.edit-row-btn:hover{opacity:1!important;color:var(--accent)}
+.del-row-btn.confirming{opacity:1!important;color:var(--red);font-weight:700;animation:pulse-red .4s infinite alternate}
+@keyframes pulse-red{from{opacity:.7}to{opacity:1}}
+.label-edit-input{width:100%;background:var(--surface);border:1px solid var(--accent);border-radius:4px;padding:2px 5px;font-size:.8rem;color:var(--text);outline:none}
 .add-th-btn{background:var(--accent);color:#fff;border:none;border-radius:4px;padding:1px 7px;font-size:.8rem;font-weight:700;cursor:pointer;margin-left:6px;vertical-align:middle;line-height:1.7;transition:background var(--tr)}
 .add-th-btn:hover{background:#5b52e0;box-shadow:0 0 8px rgba(108,99,255,.4)}
 
@@ -1110,6 +1115,12 @@ function sectionRow(icon, title, module, section, badge='') {
   </tr>`;
 }
 
+function rowLabelCell(r, module, sectionKey) {
+  const editBtn = `<button class="edit-row-btn" data-editrow="1" data-module="${module}" data-section="${sectionKey}" data-rowid="${r.id}" title="Rename">✎</button>`;
+  const delBtn = r.fixed ? '' : `<button class="del-row-btn" data-delrow="1" data-module="${module}" data-section="${sectionKey}" data-rowid="${r.id}" title="Remove row">✕</button>`;
+  return `${r.label}${editBtn}${delBtn}`;
+}
+
 function buildGridTable(rows, module, sectionKey) {
   let html = '';
   rows.forEach(r => {
@@ -1117,8 +1128,7 @@ function buildGridTable(rows, module, sectionKey) {
       `<td><input type="number" class="cell-input" min="0" step="0.01" value="${v||''}" placeholder="0"
         data-module="${module}" data-section="${sectionKey}" data-rowid="${r.id}" data-mi="${i}"></td>`
     ).join('');
-    const delBtn = r.fixed ? '' : `<button class="del-row-btn" data-delrow="1" data-module="${module}" data-section="${sectionKey}" data-rowid="${r.id}" title="Remove row">✕</button>`;
-    html += `<tr data-rowid="${r.id}"><td>${r.label}${delBtn}</td>${cols}<td class="row-total" data-rowtotal="${r.id}">${fmt(rowSum(r))}</td></tr>`;
+    html += `<tr data-rowid="${r.id}"><td>${rowLabelCell(r, module, sectionKey)}</td>${cols}<td class="row-total" data-rowtotal="${r.id}">${fmt(rowSum(r))}</td></tr>`;
   });
   return html;
 }
@@ -1310,6 +1320,10 @@ function clearColumnClipboard() {
 // BUDGET EVENTS (shared)
 // ============================================================
 function bindBudgetEvents(container) {
+  // Guard: only bind once per container element
+  if(container._budgetBound) return;
+  container._budgetBound = true;
+
   // Cell input change
   container.addEventListener('input', e => {
     if(e.target.matches('[data-module][data-section][data-rowid][data-mi]')) {
@@ -1325,31 +1339,78 @@ function bindBudgetEvents(container) {
     }
   });
 
-  // Add row button
   container.addEventListener('click', e => {
+    // Add row
     const addBtn = e.target.closest('[data-addrow]');
     if(addBtn) {
       document.getElementById('addrow-module').value = addBtn.dataset.module;
       document.getElementById('addrow-section').value = addBtn.dataset.section;
       document.getElementById('addrow-label').value = '';
       openModal('addrow-modal');
+      return;
     }
+
+    // Delete row — first click arms it, second click (within 3s) confirms
     const delBtn = e.target.closest('[data-delrow]');
     if(delBtn) {
-      const { module, section, rowid } = delBtn.dataset;
-      if(confirm('Remove this row?')) {
+      if(delBtn.classList.contains('confirming')) {
+        clearTimeout(delBtn._confirmTimer);
+        delBtn.classList.remove('confirming');
+        const { module, section, rowid } = delBtn.dataset;
         const yd = getYearData(CY);
         yd[module][section].rows = yd[module][section].rows.filter(r => r.id !== rowid);
         saveData();
-        renderSection(CS);
+        const tr = delBtn.closest('tr');
+        if(tr) tr.remove();
+        refreshGridTotals(container, yd, module);
         showToast('Row removed','info');
+      } else {
+        delBtn.classList.add('confirming');
+        delBtn.title = 'Click again to confirm';
+        delBtn._confirmTimer = setTimeout(() => {
+          delBtn.classList.remove('confirming');
+          delBtn.title = 'Remove row';
+        }, 3000);
       }
+      return;
     }
+
+    // Edit row label inline
+    const editBtn = e.target.closest('[data-editrow]');
+    if(editBtn) {
+      const { module, section, rowid } = editBtn.dataset;
+      const tr = container.querySelector(`tr[data-rowid="${rowid}"]`);
+      if(!tr) return;
+      const labelCell = tr.querySelector('td:first-child');
+      const yd = getYearData(CY);
+      const row = yd[module][section].rows.find(r => r.id === rowid);
+      if(!row) return;
+      labelCell.innerHTML = `<input class="label-edit-input" type="text" value="${row.label.replace(/"/g,'&quot;')}" maxlength="60">`;
+      const inp = labelCell.querySelector('input');
+      inp.focus(); inp.select();
+      const commit = () => {
+        const val = inp.value.trim();
+        if(val) row.label = val;
+        saveData();
+        labelCell.innerHTML = rowLabelCell(row, module, section);
+      };
+      inp.addEventListener('blur', commit);
+      inp.addEventListener('keydown', ev => {
+        if(ev.key === 'Enter') { inp.blur(); }
+        if(ev.key === 'Escape') { labelCell.innerHTML = rowLabelCell(row, module, section); }
+      });
+      return;
+    }
+
+    // Copy column
     const copyBtn = e.target.closest('[data-copycol]');
     if(copyBtn) {
       e.stopPropagation();
       copyColumn(copyBtn.dataset.module, parseInt(copyBtn.dataset.copycol));
+      return;
     }
+
+    // Paste column
     const pasteBtn = e.target.closest('[data-pastecol]');
     if(pasteBtn && pasteBtn.style.display !== 'none') {
       e.stopPropagation();
