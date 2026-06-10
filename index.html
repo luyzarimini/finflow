@@ -1124,13 +1124,27 @@ function buildSubtotalRow(label, rows, cssClass='', sk='') {
   return `<tr class="subtotal-row ${cssClass}"><td>${label}</td>${cells}<td${sk?` data-st-ann="${sk}"`:''}>${fmt(rowTotal(rows))}</td></tr>`;
 }
 
-function buildPctRow(label, rows, incomeRows, sk='') {
+// target: number (e.g. 50) — null means no coloring
+// higherIsBetter: true for Investments (≥ target = green), false for expenses (≤ target = green)
+function pctColor(val, target, higherIsBetter) {
+  if(val === null || target === null) return '';
+  return (higherIsBetter ? val >= target : val <= target) ? 'var(--green)' : 'var(--red)';
+}
+
+function buildPctRow(label, rows, incomeRows, sk='', target=null, higherIsBetter=false) {
+  const tAttr = target !== null ? ` data-pct-target="${target}" data-pct-higher="${higherIsBetter?1:0}"` : '';
   const cells = MONTHS.map((_,i) => {
     const s = rowMonthSum(rows,i), inc = rowMonthSum(incomeRows,i);
-    return `<td${sk?` data-pct="${sk}" data-mi="${i}"`:''}>${inc>0?Math.round((s/inc)*100)+'%':'—'}</td>`;
+    const v = inc > 0 ? Math.round((s/inc)*100) : null;
+    const col = pctColor(v, target, higherIsBetter);
+    const style = col ? ` style="color:${col};font-weight:600"` : '';
+    return `<td${sk?` data-pct="${sk}" data-mi="${i}"`:''}${tAttr}${style}>${v !== null ? v+'%' : '—'}</td>`;
   }).join('');
   const aS = rowTotal(rows), aI = rowTotal(incomeRows);
-  return `<tr class="pct-row"><td>${label}</td>${cells}<td${sk?` data-pct-ann="${sk}"`:''}>${aI>0?pct(aS,aI)+'%':'—'}</td></tr>`;
+  const av = aI > 0 ? pct(aS, aI) : null;
+  const aCol = pctColor(av, target, higherIsBetter);
+  const aStyle = aCol ? ` style="color:${aCol};font-weight:600"` : '';
+  return `<tr class="pct-row"><td>${label}</td>${cells}<td${sk?` data-pct-ann="${sk}"`:''}${tAttr}${aStyle}>${av !== null ? av+'%' : '—'}</td></tr>`;
 }
 
 function buildSurplusRow(p) {
@@ -1168,14 +1182,14 @@ function buildPersonalGrid(yd) {
       ${sectionRow('home','ESSENTIAL EXPENSES (−)','personal','essential','<span class="chip chip-amber" style="font-size:.62rem">Target ≤50%</span>')}
       ${buildGridTable(p.essential.rows,'personal','essential')}
       ${buildSubtotalRow('Subtotal Essential', p.essential.rows,'','essential')}
-      ${buildPctRow('% of Income', p.essential.rows, p.income.rows,'essential')}
+      ${buildPctRow('% of Income', p.essential.rows, p.income.rows,'essential', 50, false)}
     </tbody>
 
     <tbody>
       ${sectionRow('coffee','NON-ESSENTIAL (−)','personal','nonEssential','<span class="chip chip-blue" style="font-size:.62rem">Target ≤30%</span>')}
       ${buildGridTable(p.nonEssential.rows,'personal','nonEssential')}
       ${buildSubtotalRow('Subtotal Non-Essential', p.nonEssential.rows,'','nonEssential')}
-      ${buildPctRow('% of Income', p.nonEssential.rows, p.income.rows,'nonEssential')}
+      ${buildPctRow('% of Income', p.nonEssential.rows, p.income.rows,'nonEssential', 30, false)}
     </tbody>
 
     <tbody>
@@ -1187,7 +1201,7 @@ function buildPersonalGrid(yd) {
     <tbody>
       ${sectionRow('bar-chart-2','INVESTMENTS (→)','personal','investments','<span class="chip chip-green" style="font-size:.62rem">Target ≥20%</span>')}
       ${buildGridTable(p.investments.rows,'personal','investments')}
-      ${buildPctRow('% of Income', p.investments.rows, p.income.rows,'investments')}
+      ${buildPctRow('% of Income', p.investments.rows, p.income.rows,'investments', 20, true)}
     </tbody>
 
     <tbody>
@@ -1371,7 +1385,13 @@ function refreshGridTotals(container, yd, module) {
       const mi = parseInt(cell.dataset.mi);
       const s = rowMonthSum(sec.rows, mi);
       const inc = rowMonthSum(incomeRows, mi);
-      cell.textContent = inc > 0 ? Math.round((s/inc)*100)+'%' : '—';
+      const v = inc > 0 ? Math.round((s/inc)*100) : null;
+      cell.textContent = v !== null ? v+'%' : '—';
+      const target = cell.dataset.pctTarget !== undefined ? parseFloat(cell.dataset.pctTarget) : null;
+      const higher = cell.dataset.pctHigher === '1';
+      const col = pctColor(v, target, higher);
+      cell.style.color = col || '';
+      cell.style.fontWeight = col ? '600' : '';
     }
   });
   container.querySelectorAll('[data-pct-ann]').forEach(cell => {
@@ -1379,7 +1399,13 @@ function refreshGridTotals(container, yd, module) {
     if(sec && incomeRows.length) {
       const s = rowTotal(sec.rows);
       const inc = rowTotal(incomeRows);
-      cell.textContent = inc > 0 ? pct(s, inc)+'%' : '—';
+      const v = inc > 0 ? pct(s, inc) : null;
+      cell.textContent = v !== null ? v+'%' : '—';
+      const target = cell.dataset.pctTarget !== undefined ? parseFloat(cell.dataset.pctTarget) : null;
+      const higher = cell.dataset.pctHigher === '1';
+      const col = pctColor(v, target, higher);
+      cell.style.color = col || '';
+      cell.style.fontWeight = col ? '600' : '';
     }
   });
 
