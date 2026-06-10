@@ -325,6 +325,13 @@ select.form-input option{background:var(--surface)}
 .spinning{animation:spin .8s linear infinite}
 .loading-overlay{display:flex;align-items:center;justify-content:center;height:260px;gap:12px;color:var(--muted);font-size:.875rem}
 .loading-spinner{width:22px;height:22px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
+/* ── Hidden modules ─────────────────────────────────────── */
+.nav-item[data-page="business"],.nav-item[data-page="investments"],
+.mobile-nav-item[data-page="investments"],
+section.page-section[data-page="business"],
+section.page-section[data-page="investments"],
+#rule-inv-pct,.rule-card:has(#rule-inv-pct),
+.charts-grid.full{display:none!important}
 </style>
 </head>
 <body>
@@ -376,7 +383,7 @@ select.form-input option{background:var(--surface)}
         <button class="alert-dismiss" id="debt-alert-dismiss">✕</button>
       </div>
       <div class="kpi-grid" id="kpi-grid">
-        <div class="kpi-card income"><div class="kpi-label"><i data-lucide="trending-up"></i>Total Income</div><div class="kpi-value positive" id="kpi-income">R$ 0</div><div class="kpi-sub">Personal + Business</div></div>
+        <div class="kpi-card income"><div class="kpi-label"><i data-lucide="trending-up"></i>Total Income</div><div class="kpi-value positive" id="kpi-income">R$ 0</div><div class="kpi-sub">Personal</div></div>
         <div class="kpi-card expense"><div class="kpi-label"><i data-lucide="trending-down"></i>Total Expenses</div><div class="kpi-value negative" id="kpi-expenses">R$ 0</div><div class="kpi-sub">All categories</div></div>
         <div class="kpi-card"><div class="kpi-label"><i data-lucide="wallet"></i>Net Balance</div><div class="kpi-value" id="kpi-balance">R$ 0</div><div class="kpi-sub">Income − Expenses</div></div>
         <div class="kpi-card invested"><div class="kpi-label"><i data-lucide="bar-chart-2"></i>Invested</div><div class="kpi-value text-blue" id="kpi-invested">R$ 0</div><div class="kpi-sub">This year total</div></div>
@@ -927,26 +934,20 @@ function renderDashboard() {
   updateRule(yd);
   renderLineChart(yd);
   renderDonutChart(yd);
-  renderBarChart(yd);
   updateDebtAlert();
 }
 
 function updateKPIs(yd) {
   const p = yd.personal;
-  const b = yd.business;
-  const inv = yd.investments;
 
-  const personalIncome = rowTotal(p.income.rows);
-  const bizRevenue = rowTotal(b.revenue.rows);
-  const totalIncome = personalIncome + bizRevenue;
+  const totalIncome = rowTotal(p.income.rows);
 
   const essential  = rowTotal(p.essential.rows);
   const nonEss     = rowTotal(p.nonEssential.rows);
   const cards      = rowTotal(p.creditCards.rows);
-  const bizExp     = rowTotal(b.expenses.rows);
-  const totalExp   = essential + nonEss + cards + bizExp;
+  const totalExp   = essential + nonEss + cards;
 
-  const invested = rowTotal(inv.fixedIncome.rows) + rowTotal(inv.variableIncome.rows);
+  const invested = rowTotal(p.investments.rows);
   const balance  = totalIncome - totalExp;
 
   const activeDebt = D.debts.filter(d=>d.status==='active').reduce((a,d) => {
@@ -1018,9 +1019,8 @@ function renderLineChart(yd) {
   const canvas = document.getElementById('chart-line');
   if(!canvas) return;
   const p = yd.personal;
-  const b = yd.business;
-  const income = MONTHS.map((_,i) => rowMonthSum(p.income.rows,i) + rowMonthSum(b.revenue.rows,i));
-  const expenses = MONTHS.map((_,i) => rowMonthSum(p.essential.rows,i) + rowMonthSum(p.nonEssential.rows,i) + rowMonthSum(p.creditCards.rows,i) + rowMonthSum(b.expenses.rows,i));
+  const income = MONTHS.map((_,i) => rowMonthSum(p.income.rows,i));
+  const expenses = MONTHS.map((_,i) => rowMonthSum(p.essential.rows,i) + rowMonthSum(p.nonEssential.rows,i) + rowMonthSum(p.creditCards.rows,i));
   const net = income.map((v,i) => v - expenses[i]);
   const opts = { ...chartDefaults(), scales: { x: axisStyle(), y: { ...axisStyle(), ticks: { ...axisStyle().ticks, callback: v => fmt(v) } } } };
   opts.plugins.legend.display = true;
@@ -1043,19 +1043,17 @@ function renderDonutChart(yd) {
   const canvas = document.getElementById('chart-donut');
   if(!canvas) return;
   const p = yd.personal;
-  const b = yd.business;
   const ess    = rowTotal(p.essential.rows);
   const nonEss = rowTotal(p.nonEssential.rows);
   const cards  = rowTotal(p.creditCards.rows);
-  const bizExp = rowTotal(b.expenses.rows);
   const inv    = rowTotal(p.investments.rows);
   const opts = { ...chartDefaults() };
   opts.plugins.legend.position = 'bottom';
   CHARTS.donut = new Chart(canvas, {
     type: 'doughnut',
     data: {
-      labels: ['Essential','Non-Essential','Credit Cards','Business','Investments'],
-      datasets: [{ data:[ess,nonEss,cards,bizExp,inv], backgroundColor:['#ef4444','#f59e0b','#8b5cf6','#3b82f6','#22c55e'], borderWidth:0, hoverOffset:6 }]
+      labels: ['Essential','Non-Essential','Credit Cards','Investments'],
+      datasets: [{ data:[ess,nonEss,cards,inv], backgroundColor:['#ef4444','#f59e0b','#8b5cf6','#22c55e'], borderWidth:0, hoverOffset:6 }]
     },
     options: { ...opts, cutout:'68%' }
   });
