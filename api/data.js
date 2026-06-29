@@ -21,7 +21,7 @@ module.exports = async function handler(req, res) {
       const upstream = await fetch(blobUrl + `?t=${Date.now()}`); // bust CDN cache
       if (!upstream.ok) {
         blobUrl = null; // stale URL – reset and let client retry
-        return res.status(200).json(null);
+        return res.status(502).json({ error: `Blob fetch failed: ${upstream.status}` });
       }
 
       const data = await upstream.json();
