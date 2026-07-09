@@ -35,7 +35,7 @@ module.exports = async function handler(req, res) {
       JSON.parse(body); // validate JSON
 
       const blob = await put('finflow-data.json', body, {
-        access: 'public',
+        access: 'private',
         addRandomSuffix: false,
         contentType: 'application/json',
       });
