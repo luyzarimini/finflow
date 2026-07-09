@@ -637,6 +637,7 @@ section.page-section[data-page="investments"],
     <div class="form-group"><label class="form-label" data-i18n="th_status">Status</label>
       <select class="form-input" id="d-status"><option value="active" data-i18n-opt="status_active">Active</option><option value="paid" data-i18n-opt="status_paid_off">Paid Off</option></select>
     </div>
+    <div class="form-group"><label class="form-label" data-i18n="form_notes">Notes</label><textarea class="form-input" id="d-notes" rows="3" data-i18n-placeholder="placeholder_notes" placeholder="Additional details…"></textarea></div>
     <input type="hidden" id="d-edit-id">
     <div class="modal-footer">
       <button class="btn btn-ghost" id="debt-cancel" data-i18n="btn_cancel">Cancel</button>
@@ -780,6 +781,7 @@ const T = {
     form_num_installments:'# Installments *', form_interest_rate:'Interest Rate (%/mo)',
     form_paid_installments:'Paid Installments',
     placeholder_reason:'What was this for?',
+    form_notes:'Notes', placeholder_notes:'Additional details…',
     btn_save_debt:'Save Debt',
     // Add row modal
     modal_add_row:'Add Custom Row', form_row_label:'Row Label *',
@@ -934,6 +936,7 @@ const T = {
     form_num_installments:'# Termijnen *', form_interest_rate:'Rente (%/mnd)',
     form_paid_installments:'Betaalde termijnen',
     placeholder_reason:'Waarvoor was dit?',
+    form_notes:'Notities', placeholder_notes:'Aanvullende details…',
     btn_save_debt:'Schuld opslaan',
     // Add row modal
     modal_add_row:'Rij toevoegen', form_row_label:'Rijlabel *',
@@ -2199,7 +2202,7 @@ function renderDebts() {
       <td>${d.rate||0}%</td>
       <td style="color:${d.status==='active'?'var(--amber)':'var(--green)'};font-weight:600">${fmt(remaining)}</td>
       <td style="min-width:100px"><div class="pbar-wrap"><div class="pbar-fill ${progPct>=100?'green':'accent'}" style="width:${progPct}%"></div></div><div style="font-size:.68rem;color:var(--muted);margin-top:2px">${progPct}%</div></td>
-      <td class="text-muted" style="font-size:.8rem">${d.reason||'—'}</td>
+      <td class="text-muted" style="font-size:.8rem"${d.notes?` title="${d.notes.replace(/"/g,'&quot;')}"`:''}>${d.reason||'—'}${d.notes?' 📝':''}</td>
       <td>${statusChip}</td>
       <td style="white-space:nowrap">
         <button class="btn-icon" data-editdebt="${d.id}" title="Edit"><i data-lucide="pencil"></i></button>
@@ -2221,6 +2224,7 @@ function openDebtModal(id) {
   document.getElementById('d-paid').value       = d?.paidInstallments||'';
   document.getElementById('d-reason').value     = d?.reason||'';
   document.getElementById('d-status').value     = d?.status||'active';
+  document.getElementById('d-notes').value      = d?.notes||'';
   document.getElementById('d-edit-id').value    = id||'';
   openModal('debt-modal');
 }
@@ -2236,7 +2240,8 @@ function saveDebt() {
     id: id||uid(), creditor, startDate: document.getElementById('d-start').value,
     installment, numInstallments, rate: parseFloat(document.getElementById('d-rate').value)||0,
     paidInstallments: parseInt(document.getElementById('d-paid').value)||0,
-    reason: document.getElementById('d-reason').value.trim(), status: document.getElementById('d-status').value
+    reason: document.getElementById('d-reason').value.trim(), status: document.getElementById('d-status').value,
+    notes: document.getElementById('d-notes').value.trim()
   };
   if(id) D.debts = D.debts.map(x=>x.id===id?obj:x);
   else D.debts.push(obj);
@@ -2556,11 +2561,19 @@ async function init() {
   bindWeeklyEvents();
 
   // --- CLOSE MODALS ON OVERLAY CLICK ---
+  // Modals that ONLY close via their buttons (never on outside click)
+  const NO_OUTSIDE_CLOSE = ['onboarding-modal', 'debt-modal'];
   document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    // Only treat it as an outside-click if BOTH mousedown and mouseup landed on
+    // the overlay itself — prevents accidental close when a drag/selection that
+    // started inside the modal releases outside it.
+    let downOnOverlay = false;
+    overlay.addEventListener('mousedown', e => { downOnOverlay = (e.target === overlay); });
     overlay.addEventListener('click', e => {
-      if(e.target === overlay && overlay.id !== 'onboarding-modal') {
+      if(e.target === overlay && downOnOverlay && !NO_OUTSIDE_CLOSE.includes(overlay.id)) {
         overlay.classList.remove('show');
       }
+      downOnOverlay = false;
     });
   });
 
