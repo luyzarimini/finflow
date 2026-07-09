@@ -173,6 +173,8 @@ tr:hover .del-row-btn,tr:hover .edit-row-btn{opacity:.5}
 .data-table td{padding:11px 14px;border-bottom:1px solid var(--border);vertical-align:middle}
 .data-table tr:last-child td{border-bottom:none}
 .data-table tr:hover td{background:var(--surface2)}
+.data-table tr.debts-total-row td{background:var(--surface2);border-top:2px solid var(--border);font-size:.82rem}
+.data-table tr.debts-total-row:hover td{background:var(--surface2)}
 .table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
 .table-wrap.scrollable{overflow-x:auto}
 
@@ -2190,12 +2192,10 @@ function isDebtCleared(d) { return d.status === 'paid' || (debtTotal(d) > 0 && d
 function renderDebts() {
   const debts = D.debts || [];
   const active = debts.filter(d => !isDebtCleared(d));
-  const clearedCount = debts.filter(isDebtCleared).length;
   const totalActive = active.reduce((a,d) => a + debtRemaining(d), 0);
 
   document.getElementById('debt-summary').innerHTML = `
     <div class="card"><div class="kpi-label"><i data-lucide="alert-circle"></i>${t('debt_active')}</div><div class="kpi-value text-amber" style="font-size:1.2rem">${fmt(totalActive)}</div><div class="kpi-sub">${active.length} ${t('debt_active_count')}</div></div>
-    <div class="card"><div class="kpi-label"><i data-lucide="check-circle"></i>${t('debt_paid_off')}</div><div class="kpi-value text-green" style="font-size:1.2rem">${clearedCount}</div><div class="kpi-sub">${t('debt_cleared_count')}</div></div>
     <div class="card"><div class="kpi-label"><i data-lucide="credit-card"></i>${t('debt_total')}</div><div class="kpi-value" style="font-size:1.2rem">${debts.length}</div><div class="kpi-sub">${t('debt_all_time')}</div></div>
   `;
   lucide.createIcons({ el: document.getElementById('debt-summary') });
@@ -2229,6 +2229,30 @@ function renderDebts() {
       </td>
     </tr>`;
   }).join('');
+
+  // Totals row
+  const sumInstallment = debts.reduce((a,d) => a + (d.installment||0), 0);
+  const sumTotal       = debts.reduce((a,d) => a + debtTotal(d), 0);
+  const sumPaid        = debts.reduce((a,d) => a + debtPaid(d), 0);
+  const sumRemaining   = debts.reduce((a,d) => a + debtRemaining(d), 0);
+  const sumNumInst     = debts.reduce((a,d) => a + (d.numInstallments||0), 0);
+  const sumPaidInst    = debts.reduce((a,d) => a + (d.paidInstallments||0), 0);
+  const totalProg      = sumTotal > 0 ? pctCapped(sumPaid, sumTotal) : 0;
+  tbody.innerHTML += `<tr class="debts-total-row">
+    <td style="font-weight:700">${t('th_total')}</td>
+    <td>—</td>
+    <td style="font-weight:700">${fmt(sumInstallment)}</td>
+    <td style="font-weight:700">${sumPaidInst}/${sumNumInst}</td>
+    <td style="font-weight:700">${fmt(sumTotal)}</td>
+    <td>—</td>
+    <td style="color:var(--green);font-weight:700">${fmt(sumPaid)}</td>
+    <td style="color:${sumRemaining>0?'var(--amber)':'var(--green)'};font-weight:700">${fmt(sumRemaining)}</td>
+    <td style="min-width:100px"><div class="pbar-wrap"><div class="pbar-fill ${totalProg>=100?'green':'accent'}" style="width:${totalProg}%"></div></div><div style="font-size:.68rem;color:var(--muted);margin-top:2px">${totalProg}%</div></td>
+    <td>—</td>
+    <td>—</td>
+    <td></td>
+  </tr>`;
+
   lucide.createIcons({ el: tbody });
 }
 
