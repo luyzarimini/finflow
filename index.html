@@ -244,6 +244,12 @@ select.form-input option{background:var(--surface)}
 .section-title-row td{padding:0!important;background:var(--surface2);border-top:2px solid var(--border)!important;border-bottom:1px solid var(--border)!important}
 .section-title-row:first-child td{border-top:none!important}
 .section-title-row td.sec-month{text-align:center;font-size:.65rem;font-weight:600;letter-spacing:.04em;color:var(--muted);opacity:.7;vertical-align:middle;padding:6px 2px!important}
+.sec-col-btns{display:none;gap:2px;justify-content:center;margin-top:3px}
+.section-title-row td.sec-month:hover .sec-col-btns{display:flex}
+.section-title-row td.sec-month:hover{opacity:1}
+.sec-col-btn{background:var(--surface);border:1px solid var(--border);color:var(--muted);border-radius:3px;padding:0 4px;font-size:.6rem;cursor:pointer;line-height:1.6;transition:all var(--tr);font-family:inherit;white-space:nowrap;text-transform:none;letter-spacing:0}
+.sec-col-btn:hover{color:var(--accent);border-color:var(--accent)}
+.sec-col-btn.copied{color:var(--green);border-color:var(--green);background:rgba(34,197,94,.12)}
 .section-title-inner{display:flex;align-items:center;justify-content:space-between;padding:7px 14px;gap:8px}
 .section-title-inner .budget-section-title{display:flex;align-items:center;gap:7px;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .section-title-inner .budget-section-title svg{width:14px;height:14px}
@@ -808,6 +814,9 @@ const T = {
     toast_debt_deleted:'Debt deleted', toast_goal_deleted:'Goal deleted',
     toast_nothing_copied:'Nothing copied for this module',
     toast_same_col:'Source and target are the same column',
+    toast_pasted:'pasted!',
+    sec_copy_title:'Copy this section for', sec_paste_title:'Paste here',
+    sec_copy_toast:'copied — click Paste on another month for this section',
     // Confirm dialogs
     confirm_remove_bill:'Remove this bill?', confirm_remove_cat:'Remove this category?',
     confirm_reset_1:'Reset ALL data? This cannot be undone.',
@@ -959,6 +968,9 @@ const T = {
     toast_debt_deleted:'Schuld verwijderd', toast_goal_deleted:'Doel verwijderd',
     toast_nothing_copied:'Niets gekopieerd voor deze module',
     toast_same_col:'Bron en doel zijn dezelfde kolom',
+    toast_pasted:'geplakt!',
+    sec_copy_title:'Kopieer deze sectie voor', sec_paste_title:'Hier plakken',
+    sec_copy_toast:'gekopieerd — klik Plak op een andere maand voor deze sectie',
     // Confirm dialogs
     confirm_remove_bill:'Deze rekening verwijderen?', confirm_remove_cat:'Deze categorie verwijderen?',
     confirm_reset_1:'Alle gegevens wissen? Dit kan niet ongedaan worden gemaakt.',
@@ -1037,6 +1049,7 @@ let CS = 'dashboard';               // current section
 let CHARTS = {};                    // chart instances
 let debtAlertDismissed = false;
 let colClipboard = null;            // { module, monthIdx, data: { sectionKey: { rowId: value } } }
+let secClipboard = null;            // { module, section, monthIdx, data: { rowId: value } }
 
 // ============================================================
 // SYNC STATUS UI
@@ -1494,9 +1507,16 @@ function makeHeader(module) {
   return `<th>${t('grid_category')}</th>${monthThs}<th>${t('grid_annual')}</th>`;
 }
 
-// Section separator row — first cell has title+add, remaining cells repeat month names
+// Section separator row — first cell has title+add, remaining cells repeat month
+// names plus per-section copy/paste controls for that month column.
 function sectionRow(icon, title, module, section, badge='') {
-  const monthCells = t('months').map(m => `<td class="sec-month">${m}</td>`).join('');
+  const monthCells = t('months').map((m,i) => `<td class="sec-month">
+    <span class="sec-month-name">${m}</span>
+    <span class="sec-col-btns">
+      <button class="sec-col-btn sec-copy" data-seccopycol="${i}" data-module="${module}" data-section="${section}" title="${t('sec_copy_title')} ${m}">⎘</button>
+      <button class="sec-col-btn sec-paste" data-secpastecol="${i}" data-module="${module}" data-section="${section}" title="${t('sec_paste_title')}" style="display:none">▼</button>
+    </span>
+  </td>`).join('');
   return `<tr class="section-title-row">
     <td style="padding:0">
       <div class="section-title-inner">
@@ -1519,7 +1539,7 @@ function buildGridTable(rows, module, sectionKey) {
   let html = '';
   rows.forEach(r => {
     const cols = r.months.map((v,i) =>
-      `<td><input type="number" class="cell-input" min="0" step="0.01" value="${v||''}" placeholder="0"
+      `<td><input type="number" class="cell-input" min="0" step="0.01" value="${v?Number(v).toFixed(2):''}" placeholder="0.00"
         data-module="${module}" data-section="${sectionKey}" data-rowid="${r.id}" data-mi="${i}"></td>`
     ).join('');
     html += `<tr data-rowid="${r.id}"><td>${rowLabelCell(r, module, sectionKey)}</td>${cols}<td class="row-total" data-rowtotal="${r.id}">${fmt(rowSum(r))}</td></tr>`;
@@ -1710,6 +1730,44 @@ function clearColumnClipboard() {
   document.querySelectorAll('.paste-col-btn').forEach(btn => btn.style.display = 'none');
 }
 
+// ── Per-section month copy/paste (e.g. Essential Expenses: June → July) ──
+function copySectionColumn(module, section, monthIdx) {
+  const yd = getYearData(CY);
+  const sections = module === 'investments' ? yd.investments : yd[module];
+  const sec = sections[section];
+  if(!sec?.rows) return;
+  const data = {};
+  sec.rows.forEach(r => { data[r.id] = r.months[monthIdx]; });
+  secClipboard = { module, section, monthIdx, data };
+  clearColumnClipboard(); // avoid confusion with whole-column clipboard
+
+  // Highlight this copy button, reveal paste buttons on the same section's other months
+  document.querySelectorAll('.sec-copy').forEach(b => b.classList.remove('copied'));
+  document.querySelectorAll('.sec-paste').forEach(b => b.style.display = 'none');
+  document.querySelectorAll(`.sec-copy[data-module="${module}"][data-section="${section}"][data-seccopycol="${monthIdx}"]`).forEach(b => b.classList.add('copied'));
+  document.querySelectorAll(`.sec-paste[data-module="${module}"][data-section="${section}"]`).forEach(b => {
+    b.style.display = parseInt(b.dataset.secpastecol) === monthIdx ? 'none' : 'inline-block';
+  });
+
+  showToast(`${t('months')[monthIdx]} ${t('sec_copy_toast')}`, 'info', 4000);
+}
+
+function pasteSectionColumn(module, section, targetMonthIdx) {
+  if(!secClipboard || secClipboard.module !== module || secClipboard.section !== section) { showToast(t('toast_nothing_copied'),'warning'); return; }
+  if(secClipboard.monthIdx === targetMonthIdx) { showToast(t('toast_same_col'),'warning'); return; }
+
+  const yd = getYearData(CY);
+  const sections = module === 'investments' ? yd.investments : yd[module];
+  const sec = sections[section];
+  if(sec?.rows) sec.rows.forEach(r => { if(secClipboard.data[r.id] !== undefined) r.months[targetMonthIdx] = secClipboard.data[r.id]; });
+
+  const srcMonth = secClipboard.monthIdx;
+  secClipboard = null;
+  saveData();
+  renderSection(CS);
+  showToast(`${t('months')[srcMonth]} → ${t('months')[targetMonthIdx]} ${t('toast_pasted')}`, 'success');
+}
+
 // ============================================================
 // BUDGET EVENTS (shared)
 // ============================================================
@@ -1730,6 +1788,13 @@ function bindBudgetEvents(container) {
         saveData();
         refreshGridTotals(container, yd, module);
       }
+    }
+  });
+
+  // Snap cell to 2 decimals when leaving it
+  container.addEventListener('focusout', e => {
+    if(e.target.matches('input.cell-input') && e.target.value !== '') {
+      e.target.value = (parseFloat(e.target.value) || 0).toFixed(2);
     }
   });
 
@@ -1809,6 +1874,22 @@ function bindBudgetEvents(container) {
     if(pasteBtn && pasteBtn.style.display !== 'none') {
       e.stopPropagation();
       pasteColumn(pasteBtn.dataset.module, parseInt(pasteBtn.dataset.pastecol));
+      return;
+    }
+
+    // Copy section month column
+    const secCopyBtn = e.target.closest('[data-seccopycol]');
+    if(secCopyBtn) {
+      e.stopPropagation();
+      copySectionColumn(secCopyBtn.dataset.module, secCopyBtn.dataset.section, parseInt(secCopyBtn.dataset.seccopycol));
+      return;
+    }
+
+    // Paste section month column
+    const secPasteBtn = e.target.closest('[data-secpastecol]');
+    if(secPasteBtn && secPasteBtn.style.display !== 'none') {
+      e.stopPropagation();
+      pasteSectionColumn(secPasteBtn.dataset.module, secPasteBtn.dataset.section, parseInt(secPasteBtn.dataset.secpastecol));
     }
   });
 }
