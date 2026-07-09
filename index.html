@@ -1346,7 +1346,7 @@ function updateKPIs(yd) {
 
   const balance  = totalIncome - totalExp;
 
-  const activeDebt = D.debts.filter(d=>d.status==='active').reduce((a,d) => a + debtRemaining(d), 0);
+  const activeDebt = D.debts.filter(d => !isDebtCleared(d)).reduce((a,d) => a + debtRemaining(d), 0);
 
   const goals = D.goals || [];
   const totalGoalTarget = goals.reduce((a, g) => a + (g.amount || 0), 0);
@@ -2184,15 +2184,18 @@ function debtPaid(d) {
   return (d.paidInstallments||0) * (d.installment||0);
 }
 function debtRemaining(d) { return Math.max(0, debtTotal(d) - debtPaid(d)); }
+// A debt is "cleared" if fully paid by value, or explicitly marked Paid Off
+function isDebtCleared(d) { return d.status === 'paid' || (debtTotal(d) > 0 && debtRemaining(d) <= 0.005); }
 
 function renderDebts() {
   const debts = D.debts || [];
-  const active = debts.filter(d=>d.status==='active');
+  const active = debts.filter(d => !isDebtCleared(d));
+  const clearedCount = debts.filter(isDebtCleared).length;
   const totalActive = active.reduce((a,d) => a + debtRemaining(d), 0);
 
   document.getElementById('debt-summary').innerHTML = `
     <div class="card"><div class="kpi-label"><i data-lucide="alert-circle"></i>${t('debt_active')}</div><div class="kpi-value text-amber" style="font-size:1.2rem">${fmt(totalActive)}</div><div class="kpi-sub">${active.length} ${t('debt_active_count')}</div></div>
-    <div class="card"><div class="kpi-label"><i data-lucide="check-circle"></i>${t('debt_paid_off')}</div><div class="kpi-value text-green" style="font-size:1.2rem">${debts.filter(d=>d.status==='paid').length}</div><div class="kpi-sub">${t('debt_cleared_count')}</div></div>
+    <div class="card"><div class="kpi-label"><i data-lucide="check-circle"></i>${t('debt_paid_off')}</div><div class="kpi-value text-green" style="font-size:1.2rem">${clearedCount}</div><div class="kpi-sub">${t('debt_cleared_count')}</div></div>
     <div class="card"><div class="kpi-label"><i data-lucide="credit-card"></i>${t('debt_total')}</div><div class="kpi-value" style="font-size:1.2rem">${debts.length}</div><div class="kpi-sub">${t('debt_all_time')}</div></div>
   `;
   lucide.createIcons({ el: document.getElementById('debt-summary') });
@@ -2207,7 +2210,7 @@ function renderDebts() {
     const paid = debtPaid(d);
     const remaining = debtRemaining(d);
     const progPct = total > 0 ? pctCapped(paid, total) : 0;
-    const statusChip = d.status==='active' ? `<span class="chip chip-amber">${t('status_active')}</span>` : `<span class="chip chip-green">${t('status_paid_off')}</span>`;
+    const statusChip = isDebtCleared(d) ? `<span class="chip chip-green">${t('status_paid_off')}</span>` : `<span class="chip chip-amber">${t('status_active')}</span>`;
     return `<tr>
       <td style="font-weight:600">${d.creditor}</td>
       <td class="text-muted">${d.startDate||'—'}</td>
