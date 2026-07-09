@@ -733,7 +733,7 @@ const T = {
     th_installment:'Installment', th_num_inst:'# Inst.', th_rate:'Rate',
     th_paid:'Paid', th_remaining:'Remaining', th_progress:'Progress', th_reason:'Reason',
     debt_active:'Active Debts', debt_active_count:'debt(s) active',
-    debt_paid_off:'Paid Off', debt_cleared_count:'debt(s) cleared',
+    debt_paid_off:'Paid Off', debt_cleared_count:'debt(s) cleared', debt_paid_total_sub:'total paid so far',
     debt_total:'Total Debts', debt_all_time:'all time',
     empty_debts:'No debts! 🎉', status_active:'Active', status_paid_off:'Paid Off',
     // Goals
@@ -889,7 +889,7 @@ const T = {
     th_installment:'Termijn', th_num_inst:'# Term.', th_rate:'Rente',
     th_paid:'Betaald', th_remaining:'Resterend', th_progress:'Voortgang', th_reason:'Reden',
     debt_active:'Actieve Schulden', debt_active_count:'schuld(en) actief',
-    debt_paid_off:'Afbetaald', debt_cleared_count:'schuld(en) afbetaald',
+    debt_paid_off:'Afbetaald', debt_cleared_count:'schuld(en) afbetaald', debt_paid_total_sub:'totaal betaald tot nu toe',
     debt_total:'Totale Schulden', debt_all_time:'totaal',
     empty_debts:'Geen schulden! 🎉', status_active:'Actief', status_paid_off:'Afbetaald',
     // Goals
@@ -2193,10 +2193,12 @@ function renderDebts() {
   const debts = D.debts || [];
   const active = debts.filter(d => !isDebtCleared(d));
   const totalActive = active.reduce((a,d) => a + debtRemaining(d), 0);
+  const totalPaidAll = debts.reduce((a,d) => a + debtPaid(d), 0);
 
   document.getElementById('debt-summary').innerHTML = `
     <div class="card"><div class="kpi-label"><i data-lucide="alert-circle"></i>${t('debt_active')}</div><div class="kpi-value text-amber" style="font-size:1.2rem">${fmt(totalActive)}</div><div class="kpi-sub">${active.length} ${t('debt_active_count')}</div></div>
     <div class="card"><div class="kpi-label"><i data-lucide="credit-card"></i>${t('debt_total')}</div><div class="kpi-value" style="font-size:1.2rem">${debts.length}</div><div class="kpi-sub">${t('debt_all_time')}</div></div>
+    <div class="card"><div class="kpi-label"><i data-lucide="check-circle"></i>${t('debt_paid_off')}</div><div class="kpi-value text-green" style="font-size:1.2rem">${fmt(totalPaidAll)}</div><div class="kpi-sub">${t('debt_paid_total_sub')}</div></div>
   `;
   lucide.createIcons({ el: document.getElementById('debt-summary') });
 
