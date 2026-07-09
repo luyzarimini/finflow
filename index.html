@@ -498,7 +498,7 @@ section.page-section[data-page="investments"],
       <div class="debt-summary-grid" id="debt-summary"></div>
       <div class="table-wrap scrollable">
         <table class="data-table" id="debts-main-table">
-          <thead><tr><th data-i18n="th_creditor">Creditor</th><th data-i18n="th_start">Start</th><th data-i18n="th_installment">Installment</th><th data-i18n="th_num_inst"># Inst.</th><th data-i18n="th_total">Total</th><th data-i18n="th_rate">Rate</th><th data-i18n="th_paid">Paid</th><th data-i18n="th_progress">Progress</th><th data-i18n="th_reason">Reason</th><th data-i18n="th_status">Status</th><th></th></tr></thead>
+          <thead><tr><th data-i18n="th_creditor">Creditor</th><th data-i18n="th_start">Start</th><th data-i18n="th_installment">Installment</th><th data-i18n="th_num_inst"># Inst.</th><th data-i18n="th_total">Total</th><th data-i18n="th_rate">Rate</th><th data-i18n="th_paid">Paid</th><th data-i18n="th_remaining">Remaining</th><th data-i18n="th_progress">Progress</th><th data-i18n="th_reason">Reason</th><th data-i18n="th_status">Status</th><th></th></tr></thead>
           <tbody id="debts-tbody"></tbody>
         </table>
       </div>
@@ -636,6 +636,7 @@ section.page-section[data-page="investments"],
       <div class="form-group"><label class="form-label" data-i18n="form_interest_rate">Interest Rate (%/mo)</label><input type="number" class="form-input" id="d-rate" placeholder="0" min="0" step="0.01"></div>
       <div class="form-group"><label class="form-label" data-i18n="form_paid_installments">Paid Installments</label><input type="number" class="form-input" id="d-paid" placeholder="0" min="0"></div>
     </div>
+    <div class="form-group"><label class="form-label" data-i18n="form_paid_value">Paid Value</label><input type="number" class="form-input" id="d-paid-value" placeholder="0.00" min="0" step="0.01"><span style="display:block;font-size:.7rem;color:var(--muted);margin-top:4px" data-i18n="hint_paid_value">Total amount actually paid so far. Leave blank to auto-calculate from paid installments.</span></div>
     <div class="form-group"><label class="form-label" data-i18n="th_reason">Reason</label><input type="text" class="form-input" id="d-reason" data-i18n-placeholder="placeholder_reason" placeholder="What was this for?"></div>
     <div class="form-group"><label class="form-label" data-i18n="th_status">Status</label>
       <select class="form-input" id="d-status"><option value="active" data-i18n-opt="status_active">Active</option><option value="paid" data-i18n-opt="status_paid_off">Paid Off</option></select>
@@ -727,7 +728,7 @@ const T = {
     // Debts
     btn_add_debt:'Add Debt', th_creditor:'Creditor', th_start:'Start',
     th_installment:'Installment', th_num_inst:'# Inst.', th_rate:'Rate',
-    th_paid:'Paid', th_progress:'Progress', th_reason:'Reason',
+    th_paid:'Paid', th_remaining:'Remaining', th_progress:'Progress', th_reason:'Reason',
     debt_active:'Active Debts', debt_active_count:'debt(s) active',
     debt_paid_off:'Paid Off', debt_cleared_count:'debt(s) cleared',
     debt_total:'Total Debts', debt_all_time:'all time',
@@ -784,6 +785,7 @@ const T = {
     form_num_installments:'# Installments *', form_interest_rate:'Interest Rate (%/mo)',
     form_paid_installments:'Paid Installments',
     placeholder_reason:'What was this for?',
+    form_paid_value:'Paid Value', hint_paid_value:'Total amount actually paid so far. Leave blank to auto-calculate from paid installments.',
     form_notes:'Notes', placeholder_notes:'Additional details…',
     btn_save_debt:'Save Debt',
     // Add row modal
@@ -882,7 +884,7 @@ const T = {
     // Debts
     btn_add_debt:'Schuld toevoegen', th_creditor:'Schuldeiser', th_start:'Start',
     th_installment:'Termijn', th_num_inst:'# Term.', th_rate:'Rente',
-    th_paid:'Betaald', th_progress:'Voortgang', th_reason:'Reden',
+    th_paid:'Betaald', th_remaining:'Resterend', th_progress:'Voortgang', th_reason:'Reden',
     debt_active:'Actieve Schulden', debt_active_count:'schuld(en) actief',
     debt_paid_off:'Afbetaald', debt_cleared_count:'schuld(en) afbetaald',
     debt_total:'Totale Schulden', debt_all_time:'totaal',
@@ -939,6 +941,7 @@ const T = {
     form_num_installments:'# Termijnen *', form_interest_rate:'Rente (%/mnd)',
     form_paid_installments:'Betaalde termijnen',
     placeholder_reason:'Waarvoor was dit?',
+    form_paid_value:'Betaald Bedrag', hint_paid_value:'Totaal daadwerkelijk betaald bedrag tot nu toe. Laat leeg om automatisch te berekenen uit betaalde termijnen.',
     form_notes:'Notities', placeholder_notes:'Aanvullende details…',
     btn_save_debt:'Schuld opslaan',
     // Add row modal
@@ -1342,10 +1345,7 @@ function updateKPIs(yd) {
 
   const balance  = totalIncome - totalExp;
 
-  const activeDebt = D.debts.filter(d=>d.status==='active').reduce((a,d) => {
-    const remaining = (d.numInstallments - (d.paidInstallments||0)) * d.installment;
-    return a + Math.max(0, remaining);
-  }, 0);
+  const activeDebt = D.debts.filter(d=>d.status==='active').reduce((a,d) => a + debtRemaining(d), 0);
 
   const goals = D.goals || [];
   const totalGoalTarget = goals.reduce((a, g) => a + (g.amount || 0), 0);
@@ -2174,10 +2174,20 @@ function bindWeeklyEvents() {
 // ============================================================
 // DEBTS MODULE
 // ============================================================
+// Total amount owed across all installments
+function debtTotal(d) { return (d.numInstallments||0) * (d.installment||0); }
+// Amount actually paid: explicit paidValue wins, else paidInstallments × installment
+function debtPaid(d) {
+  const pv = parseFloat(d.paidValue);
+  if(!isNaN(pv) && pv > 0) return pv;
+  return (d.paidInstallments||0) * (d.installment||0);
+}
+function debtRemaining(d) { return Math.max(0, debtTotal(d) - debtPaid(d)); }
+
 function renderDebts() {
   const debts = D.debts || [];
   const active = debts.filter(d=>d.status==='active');
-  const totalActive = active.reduce((a,d) => a + Math.max(0,(d.numInstallments-(d.paidInstallments||0))*d.installment),0);
+  const totalActive = active.reduce((a,d) => a + debtRemaining(d), 0);
 
   document.getElementById('debt-summary').innerHTML = `
     <div class="card"><div class="kpi-label"><i data-lucide="alert-circle"></i>${t('debt_active')}</div><div class="kpi-value text-amber" style="font-size:1.2rem">${fmt(totalActive)}</div><div class="kpi-sub">${active.length} ${t('debt_active_count')}</div></div>
@@ -2188,13 +2198,14 @@ function renderDebts() {
 
   const tbody = document.getElementById('debts-tbody');
   if(!debts.length) {
-    tbody.innerHTML = `<tr><td colspan="11" style="padding:30px;text-align:center;color:var(--muted)">${t('empty_debts')}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" style="padding:30px;text-align:center;color:var(--muted)">${t('empty_debts')}</td></tr>`;
     return;
   }
   tbody.innerHTML = debts.map(d => {
-    const remaining = Math.max(0,(d.numInstallments-(d.paidInstallments||0))*d.installment);
-    const total = d.numInstallments * d.installment;
-    const progPct = d.numInstallments > 0 ? pctCapped((d.paidInstallments||0), d.numInstallments) : 0;
+    const total = debtTotal(d);
+    const paid = debtPaid(d);
+    const remaining = debtRemaining(d);
+    const progPct = total > 0 ? pctCapped(paid, total) : 0;
     const statusChip = d.status==='active' ? `<span class="chip chip-amber">${t('status_active')}</span>` : `<span class="chip chip-green">${t('status_paid_off')}</span>`;
     return `<tr>
       <td style="font-weight:600">${d.creditor}</td>
@@ -2203,7 +2214,8 @@ function renderDebts() {
       <td>${d.paidInstallments||0}/${d.numInstallments}</td>
       <td>${fmt(total)}</td>
       <td>${d.rate||0}%</td>
-      <td style="color:${d.status==='active'?'var(--amber)':'var(--green)'};font-weight:600">${fmt(remaining)}</td>
+      <td style="color:var(--green);font-weight:600">${fmt(paid)}</td>
+      <td style="color:${remaining>0?'var(--amber)':'var(--green)'};font-weight:600">${fmt(remaining)}</td>
       <td style="min-width:100px"><div class="pbar-wrap"><div class="pbar-fill ${progPct>=100?'green':'accent'}" style="width:${progPct}%"></div></div><div style="font-size:.68rem;color:var(--muted);margin-top:2px">${progPct}%</div></td>
       <td class="text-muted" style="font-size:.8rem"${d.notes?` title="${d.notes.replace(/"/g,'&quot;')}"`:''}>${d.reason||'—'}${d.notes?' 📝':''}</td>
       <td>${statusChip}</td>
@@ -2225,6 +2237,7 @@ function openDebtModal(id) {
   document.getElementById('d-num').value        = d?.numInstallments||'';
   document.getElementById('d-rate').value       = d?.rate||'';
   document.getElementById('d-paid').value       = d?.paidInstallments||'';
+  document.getElementById('d-paid-value').value = (d?.paidValue!==undefined && d?.paidValue!==null && d?.paidValue!=='') ? d.paidValue : '';
   document.getElementById('d-reason').value     = d?.reason||'';
   document.getElementById('d-status').value     = d?.status||'active';
   document.getElementById('d-notes').value      = d?.notes||'';
@@ -2239,10 +2252,12 @@ function saveDebt() {
   if(!creditor || isNaN(installment) || isNaN(numInstallments)) { showToast(t('toast_fill_required'),'error'); return; }
 
   const id = document.getElementById('d-edit-id').value;
+  const paidValueRaw = document.getElementById('d-paid-value').value.trim();
   const obj = {
     id: id||uid(), creditor, startDate: document.getElementById('d-start').value,
     installment, numInstallments, rate: parseFloat(document.getElementById('d-rate').value)||0,
     paidInstallments: parseInt(document.getElementById('d-paid').value)||0,
+    paidValue: paidValueRaw === '' ? null : (parseFloat(paidValueRaw)||0),
     reason: document.getElementById('d-reason').value.trim(), status: document.getElementById('d-status').value,
     notes: document.getElementById('d-notes').value.trim()
   };
