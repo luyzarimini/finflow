@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -2354,7 +2354,7 @@ function openSettings() {
   const s = D.settings||{};
   document.getElementById('s-appname').value  = s.appName||'Finflow';
   document.getElementById('s-currency').value = s.currency||'BRL';
-  document.getElementById('s-theme').value    = s.theme||'dark';
+  document.getElementById('s-theme').value    = s.theme||'light';
   openModal('settings-modal');
 }
 
@@ -2371,7 +2371,7 @@ function saveSettings() {
 
 function applySettings() {
   const s = D.settings||{};
-  document.documentElement.setAttribute('data-theme', s.theme||'dark');
+  document.documentElement.setAttribute('data-theme', s.theme||'light');
   document.getElementById('sidebar-app-name').textContent = s.appName||'Finflow';
   document.title = (s.appName||'Finflow') + ' — ' + t('app_tagline');
   if(s.lang && s.lang !== CL) { CL = s.lang; }
@@ -2382,14 +2382,14 @@ function applySettings() {
 function updateThemeToggleIcon() {
   const btn = document.getElementById('theme-toggle-top');
   if(!btn) return;
-  const isLight = (D.settings?.theme||'dark') === 'light';
+  const isLight = (D.settings?.theme||'light') === 'light';
   btn.innerHTML = `<i data-lucide="${isLight ? 'sun' : 'moon'}"></i>`;
   if(window.lucide) lucide.createIcons({ el: btn });
 }
 
 function toggleTheme() {
   if(!D.settings) D.settings = {};
-  D.settings.theme = (D.settings.theme||'dark') === 'dark' ? 'light' : 'dark';
+  D.settings.theme = (D.settings.theme||'light') === 'dark' ? 'light' : 'dark';
   document.documentElement.setAttribute('data-theme', D.settings.theme);
   const sel = document.getElementById('s-theme');
   if(sel) sel.value = D.settings.theme;
@@ -2441,7 +2441,7 @@ function finishOnboarding() {
   const year     = parseInt(document.getElementById('ob-year').value) || new Date().getFullYear();
   const salary   = parseFloat(document.getElementById('ob-salary').value) || 0;
 
-  D = { settings: { appName, currency, theme:'dark' }, years:{}, debts:[], goals:[] };
+  D = { settings: { appName, currency, theme:'light' }, years:{}, debts:[], goals:[] };
   CY = year;
   seedData(salary);
   saveData(); applySettings(); updateYearDisplay();
@@ -2488,7 +2488,7 @@ async function init() {
   if(overlay) overlay.classList.add('hidden');
 
   if(!hasData) {
-    D = { settings: { appName:'Finflow', currency:'BRL', theme:'dark' }, years:{}, debts:[], goals:[] };
+    D = { settings: { appName:'Finflow', currency:'BRL', theme:'light' }, years:{}, debts:[], goals:[] };
     showOnboarding();
   } else {
     applySettings();
@@ -2532,7 +2532,7 @@ async function init() {
     if(confirm(t('confirm_reset_1'))) {
       if(confirm(t('confirm_reset_2'))) {
         localStorage.removeItem(STORAGE_KEY);
-        D = { settings:{appName:'Finflow',currency:'BRL',theme:'dark'}, years:{}, debts:[], goals:[] };
+        D = { settings:{appName:'Finflow',currency:'BRL',theme:'light'}, years:{}, debts:[], goals:[] };
         saveData(); renderSection(CS); showToast(t('toast_data_reset'),'info');
       }
     }
