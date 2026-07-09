@@ -1,6 +1,7 @@
-const { put, list } = require('@vercel/blob');
+const { put, get } = require('@vercel/blob');
 
-let blobUrl = null;
+const BLOB_PATH = 'finflow-data.json';
+const ACCESS = 'private'; // store is configured as private
 
 module.exports = async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json');
@@ -8,20 +9,10 @@ module.exports = async function handler(req, res) {
   // ── GET  /api/data  →  return stored JSON (or null on first run)
   if (req.method === 'GET') {
     try {
-      if (!blobUrl) {
-        const { blobs } = await list({ prefix: 'finflow-data' });
-        const found = blobs.find(b => b.pathname === 'finflow-data.json');
-        if (!found) return res.status(200).json(null);
-        blobUrl = found.url;
-      }
+      const result = await get(BLOB_PATH, { access: ACCESS, useCache: false });
+      if (!result || !result.stream) return res.status(200).json(null);
 
-      const upstream = await fetch(blobUrl + `?t=${Date.now()}`);
-      if (!upstream.ok) {
-        blobUrl = null;
-        return res.status(502).json({ error: `Blob fetch failed: ${upstream.status}` });
-      }
-
-      const data = await upstream.json();
+      const data = await new Response(result.stream).json();
       return res.status(200).json(data);
     } catch (err) {
       console.error('[blob GET]', err);
@@ -34,13 +25,13 @@ module.exports = async function handler(req, res) {
       const body = await readBody(req);
       JSON.parse(body); // validate JSON
 
-      const blob = await put('finflow-data.json', body, {
-        access: 'private',
+      await put(BLOB_PATH, body, {
+        access: ACCESS,
         addRandomSuffix: false,
         contentType: 'application/json',
+        allowOverwrite: true,
       });
 
-      blobUrl = blob.url;
       return res.status(200).json({ ok: true });
     } catch (err) {
       console.error('[blob POST]', err);
