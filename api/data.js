@@ -1,26 +1,18 @@
 const { put, list } = require('@vercel/blob');
 
-// Cached blob URL to avoid a list() call on every GET after the first save.
-// Module-level state – survives within the same function instance.
-let blobUrl = null;
-
 module.exports = async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json');
 
   // ── GET  /api/data  →  return stored JSON (or null on first run)
   if (req.method === 'GET') {
     try {
-      if (!blobUrl) {
-        const { blobs } = await list({ prefix: 'finflow-data' });
-        const found = blobs.find(b => b.pathname === 'finflow-data.json');
-        if (!found) return res.status(200).json(null);
-        blobUrl = found.url;
-      }
+      const { blobs } = await list({ prefix: 'finflow-data' });
+      const found = blobs.find(b => b.pathname === 'finflow-data.json');
+      if (!found) return res.status(200).json(null);
 
-      // Fetch the blob content (public URL, no auth needed)
-      const upstream = await fetch(blobUrl + `?t=${Date.now()}`); // bust CDN cache
+      // Private blob URLs are time-limited tokens — fetch fresh each time
+      const upstream = await fetch(found.url);
       if (!upstream.ok) {
-        blobUrl = null; // stale URL – reset and let client retry
         return res.status(502).json({ error: `Blob fetch failed: ${upstream.status}` });
       }
 
@@ -34,19 +26,17 @@ module.exports = async function handler(req, res) {
   // ── POST /api/data  →  overwrite the blob with the request body
   } else if (req.method === 'POST') {
     try {
-      // Read raw body (Vercel Node.js runtime streams the body)
       const body = await readBody(req);
 
       // Validate: must be valid JSON
       JSON.parse(body);
 
-      const blob = await put('finflow-data.json', body, {
-        access: 'public',
+      await put('finflow-data.json', body, {
+        access: 'private',
         addRandomSuffix: false,
         contentType: 'application/json',
       });
 
-      blobUrl = blob.url; // update cache
       return res.status(200).json({ ok: true });
     } catch (err) {
       console.error('[blob POST]', err);
