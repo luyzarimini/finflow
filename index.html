@@ -400,7 +400,7 @@ section.page-section[data-page="weekly"],
     <section class="page-section active" data-page="dashboard">
       <div id="debt-alert" class="alert alert-amber hidden">
         <i data-lucide="alert-triangle"></i>
-        <span id="debt-alert-msg" data-i18n="alert_debts">You have active debts.</span>
+        <span id="debt-alert-msg">You have active debts.</span>
         <button class="alert-dismiss" id="debt-alert-dismiss">✕</button>
       </div>
       <div class="kpi-grid" id="kpi-grid">
@@ -698,7 +698,7 @@ const T = {
     btn_save_cloud:'Save', toast_save_ok:'Saved to cloud', toast_save_fail:'Save failed — check connection',
     btn_export:'Export', btn_import:'Import JSON',
     // Dashboard
-    alert_debts:'You have active debts.',
+    alert_debts:'You have {v} in active debts.',
     kpi_income:'Total Income', kpi_income_sub:'Personal',
     kpi_expenses:'Total Expenses', kpi_expenses_sub:'All categories',
     kpi_balance:'Net Balance', kpi_balance_sub:'Income − (Expenses + Overdue Bills)',
@@ -854,7 +854,7 @@ const T = {
     btn_save_cloud:'Opslaan', toast_save_ok:'Opgeslagen in cloud', toast_save_fail:'Opslaan mislukt — controleer verbinding',
     btn_export:'Exporteer', btn_import:'Importeer JSON',
     // Dashboard
-    alert_debts:'Je hebt actieve schulden.',
+    alert_debts:'Je hebt {v} aan actieve schulden.',
     kpi_income:'Totaal Inkomen', kpi_income_sub:'Persoonlijk',
     kpi_expenses:'Totale Uitgaven', kpi_expenses_sub:'Alle categorieën',
     kpi_balance:'Netto Saldo', kpi_balance_sub:'Inkomen − (Uitgaven + Achterstallige Rekeningen)',
@@ -1490,13 +1490,13 @@ function renderBarChart(yd) {
 
 function updateDebtAlert() {
   if(debtAlertDismissed) return;
-  const active = D.debts.filter(d=>d.status==='active');
-  const total = active.reduce((a,d) => a + Math.max(0,(d.numInstallments-(d.paidInstallments||0))*d.installment),0);
+  const active = D.debts.filter(d => !isDebtCleared(d));
+  const total = active.reduce((a,d) => a + debtRemaining(d), 0);
   const el = document.getElementById('debt-alert');
   if(!el) return;
   if(total > 0) {
     el.classList.remove('hidden');
-    document.getElementById('debt-alert-msg').textContent = `You have ${fmt(total)} in active debts.`;
+    document.getElementById('debt-alert-msg').textContent = t('alert_debts').replace('{v}', fmt(total));
   } else { el.classList.add('hidden'); }
 }
 
