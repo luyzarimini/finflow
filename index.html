@@ -404,9 +404,9 @@ section.page-section[data-page="weekly"],
       <div class="kpi-grid" id="kpi-grid">
         <div class="kpi-card income"><div class="kpi-label"><i data-lucide="trending-up"></i><span data-i18n="kpi_income">Total Income</span></div><div class="kpi-value positive" id="kpi-income">R$ 0</div><div class="kpi-sub" data-i18n="kpi_income_sub">Personal</div></div>
         <div class="kpi-card expense"><div class="kpi-label"><i data-lucide="trending-down"></i><span data-i18n="kpi_expenses">Total Expenses</span></div><div class="kpi-value negative" id="kpi-expenses">R$ 0</div><div class="kpi-sub" data-i18n="kpi_expenses_sub">All categories</div></div>
+        <div class="kpi-card debt-kpi"><div class="kpi-label"><i data-lucide="credit-card"></i><span data-i18n="kpi_debt">Overdue Bills</span></div><div class="kpi-value text-amber" id="kpi-debt">R$ 0</div><div class="kpi-sub" data-i18n="kpi_debt_sub">Total remaining</div></div>
         <div class="kpi-card"><div class="kpi-label"><i data-lucide="wallet"></i><span data-i18n="kpi_balance">Net Balance</span></div><div class="kpi-value" id="kpi-balance">R$ 0</div><div class="kpi-sub" data-i18n="kpi_balance_sub">Income − Expenses</div></div>
         <div class="kpi-card goals-kpi"><div class="kpi-label"><i data-lucide="target"></i><span data-i18n="kpi_goals">Goals</span></div><div class="kpi-value text-green" id="kpi-goals">0</div><div class="kpi-sub" id="kpi-goals-sub" data-i18n="kpi_goals_sub">Active goals</div></div>
-        <div class="kpi-card debt-kpi"><div class="kpi-label"><i data-lucide="credit-card"></i><span data-i18n="kpi_debt">Active Debt</span></div><div class="kpi-value text-amber" id="kpi-debt">R$ 0</div><div class="kpi-sub" data-i18n="kpi_debt_sub">Total remaining</div></div>
       </div>
       <div class="section-header" style="margin-bottom:12px">
         <span class="text-xs font-bold text-muted" style="text-transform:uppercase;letter-spacing:.06em" data-i18n="rule_title">50/30/20 Rule</span>
@@ -701,7 +701,7 @@ const T = {
     kpi_expenses:'Total Expenses', kpi_expenses_sub:'All categories',
     kpi_balance:'Net Balance', kpi_balance_sub:'Income − Expenses',
     kpi_goals:'Goals', kpi_goals_sub:'No goals yet', kpi_goals_saved:'saved',
-    kpi_debt:'Active Debt', kpi_debt_sub:'Total remaining',
+    kpi_debt:'Overdue Bills', kpi_debt_sub:'Total remaining',
     // Default row labels (personal budget)
     row_salary:'Salary', row_other_income:'Other Income',
     row_rent:'Rent / Housing', row_food:'Supermarket / Food',
@@ -857,7 +857,7 @@ const T = {
     kpi_expenses:'Totale Uitgaven', kpi_expenses_sub:'Alle categorieën',
     kpi_balance:'Netto Saldo', kpi_balance_sub:'Inkomen − Uitgaven',
     kpi_goals:'Doelen', kpi_goals_sub:'Nog geen doelen', kpi_goals_saved:'gespaard',
-    kpi_debt:'Actieve Schuld', kpi_debt_sub:'Totaal resterend',
+    kpi_debt:'Achterstallige Rekeningen', kpi_debt_sub:'Totaal resterend',
     // Default row labels (personal budget)
     row_salary:'Salaris', row_other_income:'Overig Inkomen',
     row_rent:'Huur / Wonen', row_food:'Supermarkt / Eten',
