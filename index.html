@@ -244,8 +244,9 @@ select.form-input option{background:var(--surface)}
 .section-title-row td{padding:0!important;background:var(--surface2);border-top:2px solid var(--border)!important;border-bottom:1px solid var(--border)!important}
 .section-title-row:first-child td{border-top:none!important}
 .section-title-row td.sec-month{text-align:center;font-size:.65rem;font-weight:600;letter-spacing:.04em;color:var(--muted);opacity:.7;vertical-align:middle;padding:6px 2px!important}
-.sec-col-btns{display:none;gap:2px;justify-content:center;margin-top:3px}
-.section-title-row td.sec-month:hover .sec-col-btns{display:flex}
+.section-title-row td.sec-month{position:relative}
+.sec-col-btns{position:absolute;inset:0;display:flex;align-items:center;gap:2px;justify-content:center;background:var(--surface2);visibility:hidden;z-index:5}
+.section-title-row td.sec-month:hover .sec-col-btns{visibility:visible}
 .section-title-row td.sec-month:hover{opacity:1}
 .sec-col-btn{background:var(--surface);border:1px solid var(--border);color:var(--muted);border-radius:3px;padding:0 4px;font-size:.6rem;cursor:pointer;line-height:1.6;transition:all var(--tr);font-family:inherit;white-space:nowrap;text-transform:none;letter-spacing:0}
 .sec-col-btn:hover{color:var(--accent);border-color:var(--accent)}
@@ -255,9 +256,10 @@ select.form-input option{background:var(--surface)}
 .section-title-inner .budget-section-title svg{width:14px;height:14px}
 
 /* ========== COLUMN COPY/PASTE ========== */
-.month-th{vertical-align:top;position:relative}
-.col-btns{display:none;gap:3px;justify-content:center;margin-top:4px}
-.month-th:hover .col-btns{display:flex}
+/* Buttons overlay the cell on hover (absolute) so the header never reflows */
+.month-th{vertical-align:middle;position:relative}
+.col-btns{position:absolute;inset:0;display:flex;align-items:center;gap:3px;justify-content:center;background:var(--surface2);visibility:hidden;z-index:5}
+.month-th:hover .col-btns{visibility:visible}
 .col-btn{background:var(--surface2);border:1px solid var(--border);color:var(--muted);border-radius:3px;padding:1px 5px;font-size:.68rem;cursor:pointer;line-height:1.7;transition:all var(--tr);font-family:inherit;white-space:nowrap}
 .col-btn:hover{color:var(--accent);border-color:var(--accent)}
 .col-btn.copied{color:var(--green);border-color:var(--green);background:rgba(34,197,94,.12)}
@@ -384,6 +386,7 @@ section.page-section[data-page="investments"],
         <button class="lang-btn active" data-lang="en">EN</button>
         <button class="lang-btn" data-lang="nl">NL</button>
       </div>
+      <button class="btn-icon" id="theme-toggle-top" data-i18n-title="theme_toggle"><i data-lucide="moon"></i></button>
       <button class="btn-icon" id="settings-btn-top" data-i18n-title="nav_settings"><i data-lucide="settings"></i></button>
       <button class="btn-icon" id="export-btn-top" data-i18n-title="btn_export"><i data-lucide="download"></i></button>
     </div>
@@ -760,7 +763,7 @@ const T = {
     sec_variable_income:'VARIABLE INCOME', sub_variable_income:'Variable Income Total',
     // Settings modal
     form_app_name:'App Name', form_currency:'Currency', form_theme:'Theme',
-    theme_dark:'Dark', theme_light:'Light',
+    theme_dark:'Dark', theme_light:'Light', theme_toggle:'Toggle light / dark',
     form_data_mgmt:'Data Management',
     btn_export_json:'Export JSON', btn_import_json:'Import JSON',
     btn_reset:'Reset All Data', btn_cancel:'Cancel',
@@ -915,7 +918,7 @@ const T = {
     sec_variable_income:'VARIABELE INKOMSTEN', sub_variable_income:'Totaal Variabele Inkomsten',
     // Settings modal
     form_app_name:'App naam', form_currency:'Valuta', form_theme:'Thema',
-    theme_dark:'Donker', theme_light:'Licht',
+    theme_dark:'Donker', theme_light:'Licht', theme_toggle:'Licht / donker wisselen',
     form_data_mgmt:'Gegevensbeheer',
     btn_export_json:'Exporteer JSON', btn_import_json:'Importeer JSON',
     btn_reset:'Alle gegevens wissen', btn_cancel:'Annuleren',
@@ -2356,7 +2359,26 @@ function applySettings() {
   document.getElementById('sidebar-app-name').textContent = s.appName||'Finflow';
   document.title = (s.appName||'Finflow') + ' — ' + t('app_tagline');
   if(s.lang && s.lang !== CL) { CL = s.lang; }
+  updateThemeToggleIcon();
   applyI18n();
+}
+
+function updateThemeToggleIcon() {
+  const btn = document.getElementById('theme-toggle-top');
+  if(!btn) return;
+  const isLight = (D.settings?.theme||'dark') === 'light';
+  btn.innerHTML = `<i data-lucide="${isLight ? 'sun' : 'moon'}"></i>`;
+  if(window.lucide) lucide.createIcons({ el: btn });
+}
+
+function toggleTheme() {
+  if(!D.settings) D.settings = {};
+  D.settings.theme = (D.settings.theme||'dark') === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', D.settings.theme);
+  const sel = document.getElementById('s-theme');
+  if(sel) sel.value = D.settings.theme;
+  updateThemeToggleIcon();
+  saveData();
 }
 
 function exportData() {
@@ -2479,6 +2501,7 @@ async function init() {
   const openSet = () => openSettings();
   document.getElementById('settings-btn').addEventListener('click', openSet);
   document.getElementById('settings-btn-top').addEventListener('click', openSet);
+  document.getElementById('theme-toggle-top').addEventListener('click', toggleTheme);
   document.getElementById('settings-close').addEventListener('click', ()=>closeModal('settings-modal'));
   document.getElementById('settings-cancel').addEventListener('click', ()=>closeModal('settings-modal'));
   document.getElementById('settings-save').addEventListener('click', saveSettings);
