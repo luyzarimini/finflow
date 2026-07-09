@@ -420,7 +420,13 @@ section.page-section[data-page="investments"],
     <section class="page-section" data-page="personal">
       <div class="section-header">
         <h2 class="section-title" data-i18n="nav_personal">Personal Budget</h2>
-        <span class="text-xs text-muted" id="personal-year-label">2025</span>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="text-xs text-muted" id="personal-year-label">2025</span>
+          <button class="btn btn-sm" id="personal-save-btn" style="display:flex;align-items:center;gap:5px;padding:5px 12px;font-size:.75rem">
+            <i data-lucide="cloud-upload" style="width:13px;height:13px"></i>
+            <span data-i18n="btn_save_cloud">Save</span>
+          </button>
+        </div>
       </div>
       <div id="personal-container"></div>
     </section>
@@ -675,6 +681,7 @@ const T = {
     // Topbar
     sync_title:'Cloud sync status', sync_idle:'Synced', sync_pending:'Pending…',
     sync_syncing:'Saving…', sync_saved:'Saved', sync_error:'Sync error', sync_offline:'Offline',
+    btn_save_cloud:'Save', toast_save_ok:'Saved to cloud', toast_save_fail:'Save failed — check connection',
     btn_export:'Export', btn_import:'Import JSON',
     // Dashboard
     alert_debts:'You have active debts.',
@@ -825,6 +832,7 @@ const T = {
     // Topbar
     sync_title:'Cloud synchronisatiestatus', sync_idle:'Gesynchroniseerd', sync_pending:'Wachten…',
     sync_syncing:'Opslaan…', sync_saved:'Opgeslagen', sync_error:'Synchronisatiefout', sync_offline:'Offline',
+    btn_save_cloud:'Opslaan', toast_save_ok:'Opgeslagen in cloud', toast_save_fail:'Opslaan mislukt — controleer verbinding',
     btn_export:'Exporteer', btn_import:'Importeer JSON',
     // Dashboard
     alert_debts:'Je hebt actieve schulden.',
@@ -1111,8 +1119,10 @@ function saveData() {
   _saveTimer = setTimeout(pushToBlob, 1500);
 }
 
-async function pushToBlob() {
+async function pushToBlob(explicit = false) {
   setSyncStatus('syncing');
+  const btn = document.getElementById('personal-save-btn');
+  if(btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
   try {
     const resp = await fetch('/api/data', {
       method: 'POST',
@@ -1122,9 +1132,12 @@ async function pushToBlob() {
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     setSyncStatus('saved');
     setTimeout(() => setSyncStatus('idle'), 3000);
+    if(explicit) showToast(t('toast_save_ok'), 'success');
   } catch(e) {
     setSyncStatus('error');
-    showToast(t('toast_sync_failed'), 'warning', 5000);
+    showToast(t(explicit ? 'toast_save_fail' : 'toast_sync_failed'), 'warning', 5000);
+  } finally {
+    if(btn) { btn.disabled = false; btn.style.opacity = ''; }
   }
 }
 
@@ -2385,6 +2398,10 @@ async function init() {
   document.getElementById('settings-save').addEventListener('click', saveSettings);
   document.getElementById('s-export').addEventListener('click', exportData);
   document.getElementById('export-btn-top').addEventListener('click', exportData);
+  document.getElementById('personal-save-btn').addEventListener('click', () => {
+    clearTimeout(_saveTimer);
+    pushToBlob(true);
+  });
   document.getElementById('s-import-file').addEventListener('change', e => { if(e.target.files[0]) importData(e.target.files[0]); });
   document.getElementById('s-reset').addEventListener('click', () => {
     if(confirm(t('confirm_reset_1'))) {
